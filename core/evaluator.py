@@ -18,25 +18,41 @@ class PromptBench:
             raise ValueError("OPENROUTER_API_KEY not found in environment variables.")
 
     def call_model(self, model: str, prompt: str) -> Dict:
-        """Calls the OpenRouter API for a specific model."""
+        """Calls the appropriate API (OpenRouter or OpenAI) for a specific model."""
         start_time = time.time()
+        
+        # Determine provider and endpoint
+        if model.startswith("gpt-") or "openai" in model.lower() and "openrouter" not in model.lower():
+            url = "https://api.openai.com/v1/chat/completions"
+            api_key = os.getenv("OPENAI_API_KEY")
+            headers = {"Authorization": f"Bearer {api_key}"}
+        else:
+            url = "https://openrouter.ai/api/v1/chat/completions"
+            api_key = os.getenv("OPENROUTER_API_KEY")
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "HTTP-Referer": "https://github.com/AIassistent2025/promptbench", # Optional for OpenRouter
+                "X-Title": "PromptBench"
+            }
+
+        if not api_key:
+            return {"model": model, "status": "error", "message": "API Key not found."}
+
         try:
             response = requests.post(
-                url="https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
+                url=url,
+                headers=headers,
                 json={
                     "model": model,
                     "messages": [{"role": "user", "content": prompt}],
                 },
                 timeout=30
             )
-            response.raise_for_status()
             data = response.json()
-            latency = time.time() - start_time
+            if response.status_code != 200:
+                return {"model": model, "status": "error", "message": data.get('error', {}).get('message', 'Unknown error')}
             
+            latency = time.time() - start_time
             return {
                 "model": model,
                 "content": data['choices'][0]['message']['content'],
