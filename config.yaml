@@ -1,0 +1,5 @@
+models:
+  - "openai/gpt-3.5-turbo"
+  - "anthropic/claude-3-haiku"
+  - "meta-llama/llama-3-8b-instruct"
+  - "google/gemini-flash-1.5"

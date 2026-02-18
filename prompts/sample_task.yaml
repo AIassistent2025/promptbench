@@ -1,0 +1,9 @@
+name: "Structured Data Extraction"
+prompt: |
+  Extract the main topics and sentiment from the following text. 
+  Output MUST be a JSON object with keys: "topics" (list) and "sentiment" (string).
+  Text: "Tesla shares rose 5% after the company announced record-breaking quarterly deliveries, beating analyst expectations despite supply chain challenges."
+evaluation_criteria:
+  is_json: true
+  contains_keywords: ["Tesla", "deliveries"]
+  max_length: 50
