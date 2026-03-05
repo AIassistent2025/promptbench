@@ -1,4 +1,5 @@
 import os
+import json
 import yaml
 import time
 import requests
@@ -18,20 +19,21 @@ class PromptBench:
             raise ValueError("OPENROUTER_API_KEY not found in environment variables.")
 
     def call_model(self, model: str, prompt: str) -> Dict:
-        """Calls the appropriate API (OpenRouter or OpenAI) for a specific model."""
+        """Calls native OpenAI API for bare gpt-* names, OpenRouter for all others."""
         start_time = time.time()
-        
-        # Determine provider and endpoint
-        if model.startswith("gpt-") or "openai" in model.lower() and "openrouter" not in model.lower():
+
+        if model.startswith("gpt-"):
+            # Native OpenAI API — model name has no provider prefix
             url = "https://api.openai.com/v1/chat/completions"
             api_key = os.getenv("OPENAI_API_KEY")
             headers = {"Authorization": f"Bearer {api_key}"}
         else:
+            # OpenRouter — handles openai/xxx, anthropic/xxx, google/xxx, etc.
             url = "https://openrouter.ai/api/v1/chat/completions"
-            api_key = os.getenv("OPENROUTER_API_KEY")
+            api_key = self.api_key
             headers = {
                 "Authorization": f"Bearer {api_key}",
-                "HTTP-Referer": "https://github.com/AIassistent2025/promptbench", # Optional for OpenRouter
+                "HTTP-Referer": "https://github.com/AIassistent2025/promptbench",
                 "X-Title": "PromptBench"
             }
 
@@ -51,7 +53,7 @@ class PromptBench:
             data = response.json()
             if response.status_code != 200:
                 return {"model": model, "status": "error", "message": data.get('error', {}).get('message', 'Unknown error')}
-            
+
             latency = time.time() - start_time
             return {
                 "model": model,
@@ -68,32 +70,31 @@ class PromptBench:
         scores = {}
         if "max_length" in criteria:
             scores["length_check"] = 1.0 if len(response.split()) <= criteria["max_length"] else 0.0
-        
+
         if "contains_keywords" in criteria:
             matches = sum(1 for k in criteria["contains_keywords"] if k.lower() in response.lower())
             scores["keyword_score"] = matches / len(criteria["contains_keywords"])
-            
-        if "is_json" in criteria and criteria["is_json"]:
-            import json
+
+        if criteria.get("is_json"):
             try:
                 json.loads(response)
                 scores["format_score"] = 1.0
-            except:
+            except (json.JSONDecodeError, ValueError):
                 scores["format_score"] = 0.0
-                
+
         avg_score = sum(scores.values()) / len(scores) if scores else 1.0
         return {"scores": scores, "total": round(avg_score, 2)}
 
     def run_benchmark(self, prompt_file: str):
         with open(prompt_file, 'r') as f:
             prompt_data = yaml.safe_load(f)
-        
+
         prompt_text = prompt_data['prompt']
         models = self.config['models']
         criteria = prompt_data.get('evaluation_criteria', {})
-        
+
         results = []
-        
+
         with Progress() as progress:
             task = progress.add_task("[cyan]Running benchmark...", total=len(models))
             for model in models:
@@ -104,7 +105,7 @@ class PromptBench:
                     res['breakdown'] = eval_res['scores']
                 results.append(res)
                 progress.advance(task)
-        
+
         self.display_results(prompt_data['name'], results)
 
     def display_results(self, name: str, results: List[Dict]):
@@ -125,6 +126,6 @@ class PromptBench:
                     "[green]PASS" if r['score'] >= 0.7 else "[yellow]FAIL"
                 )
             else:
-                table.add_row(r['model'], "0.0", "N/A", "N/A", f"[red]ERR")
+                table.add_row(r['model'], "0.0", "N/A", "N/A", "[red]ERR")
 
         console.print(table)

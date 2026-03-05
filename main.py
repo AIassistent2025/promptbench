@@ -12,7 +12,10 @@ def main():
         bench = PromptBench("config.yaml")
         bench.run_benchmark(prompt_file)
     except Exception as e:
+        import traceback
         print(f"Error: {e}")
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
